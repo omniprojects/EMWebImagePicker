@@ -143,9 +143,27 @@ static NSString *const identifier = @"EMWebImageCollectionCell";
         [self.activityIndicator sizeToFit];
         [self.view addSubview:self.activityIndicator];
     }
+    [self initRefreshControl];
 }
 
-#pragma mark - Setters
+#pragma mark - Pull to refresh
+
+- (void)initRefreshControl
+{
+    UIRefreshControl *refreshControl = [[UIRefreshControl alloc] init];
+    [refreshControl setTintColor:[UIColor whiteColor]];
+    refreshControl.transform = CGAffineTransformMakeScale(5.0, 5.0);
+    [refreshControl addTarget:self action:@selector(refreshCollection:) forControlEvents:UIControlEventValueChanged];
+    [self.collectionView addSubview:refreshControl];
+    self.collectionView.alwaysBounceVertical = YES;
+}
+
+- (void)refreshCollection:(UIRefreshControl *)refreshControl
+{
+    refreshControl.attributedTitle = [[NSAttributedString alloc] initWithString:@"Refreshing data..."];
+    [self.collectionView reloadData];
+    [refreshControl endRefreshing];
+}
 
 - (void)setType:(EMWebImagePickerType)type {
     _type = type;
