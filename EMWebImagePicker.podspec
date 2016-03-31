@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name         = 'EMWebImagePicker'
-  s.version      = '0.3'
+  s.version      = '0.4'
   s.license      = 'MIT'
   s.summary      = 'An iOS Image picker for URL based images'
   s.homepage     = 'https://github.com/omniprojects/EMWebImagePicker'
@@ -10,7 +10,7 @@ Pod::Spec.new do |s|
   }
   s.source = {
     :git => 'https://github.com/omniprojects/EMWebImagePicker.git',
-    :tag => '0.3'
+    :tag => '0.4'
   }
   s.source_files = 'EMWebImagePicker/*.{h,m}'
   s.resources = 'EMWebImagePicker/*.png'

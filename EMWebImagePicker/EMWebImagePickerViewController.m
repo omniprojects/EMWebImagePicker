@@ -152,7 +152,7 @@ static NSString *const identifier = @"EMWebImageCollectionCell";
 {
     UIRefreshControl *refreshControl = [[UIRefreshControl alloc] init];
     [refreshControl setTintColor:[UIColor whiteColor]];
-    refreshControl.transform = CGAffineTransformMakeScale(5.0, 5.0);
+    refreshControl.transform = CGAffineTransformMakeScale(1.0, 1.0);
     [refreshControl addTarget:self action:@selector(refreshCollection:) forControlEvents:UIControlEventValueChanged];
     [self.collectionView addSubview:refreshControl];
     self.collectionView.alwaysBounceVertical = YES;
@@ -347,8 +347,12 @@ static NSString *const identifier = @"EMWebImageCollectionCell";
     progress.hidden = NO;
     progress.progress = 0;
     
-    [imageView setImageWithURL:imageUrl placeholderImage:nil options:0 progress:^(NSInteger receivedSize, NSInteger expectedSize) {
+    [imageView setImageWithURL:imageUrl placeholderImage:nil
+                       options:SDWebImageRetryFailed | SDWebImageProgressiveDownload | SDWebImageContinueInBackground
+                      progress:^(NSInteger receivedSize, NSInteger expectedSize) {
+                          
         ((DACircularProgressView *)[wImageView.superview viewWithTag:7]).progress = (CGFloat)receivedSize / (CGFloat)expectedSize;
+                          
     } completed:^(UIImage *image, NSError *error, SDImageCacheType cacheType) {
         wImageView.alpha = 1.0f;
         progress.hidden = YES;
