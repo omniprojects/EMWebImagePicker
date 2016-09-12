@@ -2,7 +2,7 @@
 //  EMWebImagePickerViewController.m
 //  Example
 //
-//  Created by Elliott Minns on 20/02/2014.
+//  Created by ElliottMinns on 20/02/2014.
 //  Copyright (c) 2014 Elliott Minns. All rights reserved.
 //
 
@@ -10,7 +10,6 @@
 #import "UIImageView+WebCache.h"
 #import "EMWebImageModel.h"
 #import "DACircularProgressView.h"
-
 
 NS_ENUM(NSInteger, kCellTag) {
     CellTagImageView = 5,
@@ -43,6 +42,8 @@ UICollectionViewDelegate, UICollectionViewDelegateFlowLayout, UIScrollViewDelega
 
 // Pagination.
 @property (nonatomic, strong) UIActivityIndicatorView *activityIndicator;
+
+@property (nonatomic, strong) NSIndexPath *lastSelectedIndexPath;
 
 @end
 
@@ -94,6 +95,11 @@ static NSString *const identifier = @"EMWebImageCollectionCell";
 
 - (void)viewDidLoad {
     [super viewDidLoad];
+    
+    NSUInteger *row = [[NSUserDefaults standardUserDefaults] integerForKey:@"lastSelectedIndexPathRow"];
+    NSUInteger *section = [[NSUserDefaults standardUserDefaults] integerForKey:@"lastSelectedIndexPathSection"];
+    self.lastSelectedIndexPath = [NSIndexPath indexPathForRow:row inSection:section];
+    
     UICollectionViewFlowLayout *layout = [[UICollectionViewFlowLayout alloc] init];
     self.collectionView = [[UICollectionView alloc] initWithFrame:CGRectZero collectionViewLayout:layout];
     self.collectionView.delegate = self;
@@ -143,11 +149,20 @@ static NSString *const identifier = @"EMWebImageCollectionCell";
         [self.activityIndicator sizeToFit];
         [self.view addSubview:self.activityIndicator];
     }
+    
+    // add long press gesture recognizer
+    UILongPressGestureRecognizer *lpgr = [[UILongPressGestureRecognizer alloc] initWithTarget:self action:@selector(handleLongPress:)];
+    lpgr.delegate = self;
+    lpgr.delaysTouchesBegan = YES;
+    [self.collectionView addGestureRecognizer:lpgr];
+    
     [self initRefreshControl];
 }
 
+
 #pragma mark - Pull to refresh
 
+/*! Initialize the refresh control. */
 - (void)initRefreshControl
 {
     UIRefreshControl *refreshControl = [[UIRefreshControl alloc] init];
@@ -158,12 +173,23 @@ static NSString *const identifier = @"EMWebImageCollectionCell";
     self.collectionView.alwaysBounceVertical = YES;
 }
 
+/*! Called when user pulls to refresh the EMWebImagePickerViewController. This function calls back to ORScanObjectVC to request it to check the ftp server location for any images that have been captured at the imaging station since the EMWebImagePickerViewController initialized. */
 - (void)refreshCollection:(UIRefreshControl *)refreshControl
 {
     refreshControl.attributedTitle = [[NSAttributedString alloc] initWithString:@"Refreshing data..."];
-    [self.collectionView reloadData];
+    [self.rescanImagesDelegate requestRescanItemImages:self];
     [refreshControl endRefreshing];
 }
+
+/*! 
+ @brief Called back by ORScanObjectVC after it has finished checking the ftp server location for newly captured images.
+ @param (in) urls - Contains an updated list of image urls (includes any newly captured images discovered on the ftp server).
+ */
+- (void)reloadImages:(NSArray *)urls {
+    self.images = [[NSMutableArray alloc] initWithArray:[self cleanArray:urls]];
+    [self.collectionView reloadData];
+}
+
 
 - (void)setType:(EMWebImagePickerType)type {
     _type = type;
@@ -341,6 +367,12 @@ static NSString *const identifier = @"EMWebImageCollectionCell";
     NSURL *imageUrl = object.url;
     UIImageView *imageView = (UIImageView *)[cell.contentView viewWithTag:CellTagImageView];
     imageView.alpha = 0.0f;
+    
+    // highlight the last selected item
+    if ([indexPath isEqual:self.lastSelectedIndexPath] ) {
+        [imageView.layer setBorderColor: [[UIColor blueColor] CGColor]];
+        [imageView.layer setBorderWidth: 5.0];
+    }
     __weak UIImageView *wImageView = imageView;
     
     DACircularProgressView *progress = (DACircularProgressView *)[cell.contentView viewWithTag:7];
@@ -433,6 +465,23 @@ static NSString *const identifier = @"EMWebImageCollectionCell";
     } else {
         UIImageView *tickImage = (UIImageView *)[cell.contentView viewWithTag:CellTagTickImageView];
         tickImage.hidden = NO;
+        
+        // remove border on last selected item
+        if (self.lastSelectedIndexPath != nil) {
+            UICollectionViewCell *previousCell = [collectionView cellForItemAtIndexPath:self.lastSelectedIndexPath];
+            UIImageView *imageView = (UIImageView *)[previousCell.contentView viewWithTag:CellTagImageView];
+            [imageView.layer setBorderColor: [[UIColor clearColor] CGColor]];
+            [imageView.layer setBorderWidth: 0.0];
+        }
+        
+        // update the border on the most recently selected item
+        UIImageView *imageView = (UIImageView *)[cell.contentView viewWithTag:CellTagImageView];
+        [imageView.layer setBorderColor: [[UIColor blueColor] CGColor]];
+        [imageView.layer setBorderWidth: 5.0];
+        
+        self.lastSelectedIndexPath = indexPath;
+        [[NSUserDefaults standardUserDefaults] setInteger:indexPath.section forKey:@"lastSelectedIndexPathSection"];
+        [[NSUserDefaults standardUserDefaults] setInteger:indexPath.row forKey:@"lastSelectedIndexPathRow"];
     }
     
     EMWebImageModel *model = self.images[indexPath.row];
@@ -464,6 +513,10 @@ static NSString *const identifier = @"EMWebImageCollectionCell";
         self.selectedModel.selected = NO;
         [self.collectionView reloadItemsAtIndexPaths:@[indexPath]];
     }
+    
+    UIImageView *imageView = (UIImageView *)[cell.contentView viewWithTag:CellTagImageView];
+    [imageView.layer setBorderColor: [[UIColor clearColor] CGColor]];
+    [imageView.layer setBorderWidth: 0.0];
 }
 
 #pragma mark - UIScrollViewDelegate Methods
@@ -496,6 +549,82 @@ static NSString *const identifier = @"EMWebImageCollectionCell";
 
 - (UIStatusBarStyle)preferredStatusBarStyle {
     return UIStatusBarStyleDefault;
+}
+
+#pragma mark UIGestureRecognizerDelegate
+
+/*! Handler for a long press gesture on a UICollectionView cell. This function will re-download the image from the ftp server location and then update the collection view. */
+-(void)handleLongPress:(UILongPressGestureRecognizer *)gestureRecognizer
+{
+    if (gestureRecognizer.state != UIGestureRecognizerStateEnded) {
+        return;
+    }
+    CGPoint p = [gestureRecognizer locationInView:self.collectionView];
+    
+    NSIndexPath *indexPath = [self.collectionView indexPathForItemAtPoint:p];
+    if (indexPath == nil){
+        NSLog(@"couldn't find index path");
+    } else {
+        // get the cell at indexPath (the one the user long pressed)
+        UICollectionViewCell* cell = [self.collectionView cellForItemAtIndexPath:indexPath];
+        
+        if (cell == nil) {
+            NSLog(@"couldn't find cell");
+            return;
+        }
+        
+        // model
+        EMWebImageModel *model = self.images[indexPath.row];
+        if (model == nil) {
+            NSLog(@"couldn't find model at self.images[%lu]", (unsigned long)indexPath.row );
+            return;
+        }
+        UIImageView *imageView = (UIImageView *)[cell.contentView viewWithTag:CellTagImageView];
+        if(imageView == nil) {
+            NSLog(@"couldn't find imageView");
+            return;
+        }
+        NSURL *imageUrl = model.url;
+        imageView.alpha = 0.0f;
+        __weak UIImageView *wImageView = imageView;
+        
+        DACircularProgressView *progress = (DACircularProgressView *)[cell.contentView viewWithTag:7];
+        progress.hidden = NO;
+        progress.progress = 0;
+        
+        // remove the offending image from the SDImage cache
+        NSString *urlString = [imageUrl absoluteString];
+        NSLog(@"Remove %@ from cache.", urlString);
+        [[SDImageCache sharedImageCache] removeImageForKey:urlString fromDisk:YES];
+        
+        // Download the image from the server again
+        [imageView setImageWithURL:imageUrl placeholderImage:nil
+                           options: SDWebImageRetryFailed | SDWebImageProgressiveDownload | SDWebImageContinueInBackground
+                          progress:^(NSInteger receivedSize, NSInteger expectedSize) {
+                              
+                              ((DACircularProgressView *)[wImageView.superview viewWithTag:7]).progress = (CGFloat)receivedSize / (CGFloat)expectedSize;
+//                              NSUInteger percentageComplete = ((100 * receivedSize) / expectedSize);
+//                              NSLog(@"Downloading new image progress: %lu\%", percentageComplete);
+                              
+                          } completed:^(UIImage *image, NSError *error, SDImageCacheType cacheType) {
+                              wImageView.alpha = 1.0f;
+                              progress.hidden = YES;
+                              
+                              switch (cacheType) {
+                              case SDImageCacheTypeNone:
+                                    NSLog(@"Downloaded new image from web: %@", imageUrl);
+                                    break;
+                              case SDImageCacheTypeDisk:
+                                    NSLog(@"Downloaded new image from disk cache: %@", imageUrl);
+                                    break;
+                              case SDImageCacheTypeMemory:
+                                    NSLog(@"Downloaded new image from memory cache: %@", imageUrl);
+                                    break;
+                              }
+                              
+                              [self.collectionView reloadData];
+                          }];
+    }
 }
 
 @end

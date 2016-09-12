@@ -10,6 +10,15 @@
 
 @class EMWebImagePickerViewController;
 
+@protocol ORScanItemImagesDelegate <NSObject>
+
+@optional
+
+/*! Delegate should call [self reloadItemImages] */
+- (void) requestRescanItemImages:(EMWebImagePickerViewController*)self;
+
+@end
+
 typedef void (^EMWebImagePickerSelectedBlock)(EMWebImagePickerViewController *picker, NSArray *selectedIndicies);
 typedef void (^EMPickerBlock)(EMWebImagePickerViewController *picker);
 typedef void (^EMWebImagePickerArrayBlock)(NSArray *array);
@@ -32,7 +41,7 @@ typedef NS_ENUM(NSInteger, EMWebImagePickerType) {
                                        failure:(EMWebImagePickerErrorBlock)failure;
 @end
 
-@interface EMWebImagePickerViewController : UIViewController
+@interface EMWebImagePickerViewController : UIViewController <UIGestureRecognizerDelegate>
 
 - (id)initWithURLs:(NSArray *)urls;
 - (id)initWithURLs:(NSArray *)urls
@@ -40,8 +49,11 @@ typedef NS_ENUM(NSInteger, EMWebImagePickerType) {
          cancelled:(EMPickerBlock)cancelled;
 
 @property (nonatomic, weak) id<EMWebImagePickerViewControllerDelegate> delegate;
+@property (nonatomic, weak) id<ORScanItemImagesDelegate> rescanImagesDelegate;
 @property (nonatomic, assign) EMWebImagePickerType type;
 @property (nonatomic, assign) BOOL pagingEnabled;
 @property (nonatomic, strong) NSArray *previousSelectedUrls;
 
+- (void)reloadImages:(NSArray *)urls;
+    
 @end
